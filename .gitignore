@@ -1,0 +1,6 @@
+*.db 
+build-chat*/
+api
+*pro.user
+/client/chat-client/set.db
+/server/chat-server/set.db

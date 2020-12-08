@@ -1,2 +1,6 @@
 # chat
-simple chat server and client
+Простой сервер и клиент чата 
+Реализован на Qt 5.6.2 
+Описание api находится в файле api.txt
+
+
