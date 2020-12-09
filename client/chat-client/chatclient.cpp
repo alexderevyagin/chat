@@ -74,8 +74,8 @@ void ChatClient::onReadyRead()//Обработчик нового служебн
 void ChatClient::on_loginButton_clicked()//Обработчик кнопки входа
 {
     state=0;
-    if (ui->isReg->isChecked())
-        state=3;
+    if (ui->isReg->isChecked()){
+        state=3;}
     if (client->state()!=client->ConnectedState)
         client->connectToHost(ui->ipEdit->text(),12345,QIODevice::ReadWrite);
     else
@@ -208,9 +208,9 @@ void ChatClient::on_addDialog_clicked()//Обработчик кнопки "+" (
     QInputDialog dialog;
 
     QString username=dialog.getText(this,"Добавление диалога","Введите имя пользователя",QLineEdit::Normal,"",&ok);
-    if (ok && username.isEmpty()){
+    if (ok && !username.isEmpty()){
     state=5;
-    params["username"]=
+    params["username"]=username;
     params["session_id"]=QString::number(session_id);
     addUsername=params["username"];
     sendXml("check_user",params);
@@ -285,7 +285,7 @@ void ChatClient::completeReg()//Процедура завершения реги
     ui->isReg->setChecked(false);
     QMessageBox::information(this,"Информация","Регистрация успешно завершена!");
     state=0;
-
+    sendLogin();
 }
 void ChatClient::onDisconnected()//Обработчик события разрыва соединения
 {
@@ -392,14 +392,9 @@ void ChatClient::checkSchema()//Процедура проверки коррек
 void ChatClient::delDialog(QString username)//Процедура удаления диалога из СУБД
 {
     QSqlQuery query;
-    query.prepare("select rowid from dialogs where login_name=:login_name and username=:username");
+    query.prepare("delete from messages where dialog_id=(select rowid from dialogs where login_name=:login_name and username=:username);");
     query.bindValue(":login_name",ui->loginEdit->text());
     query.bindValue(":username",currentDialog);
-    query.exec();
-    query.next();
-    int dialog_id=query.value(0).toInt();
-    query.prepare("delete from messages where dialog_id=:dialog_id;");
-    query.bindValue(":dialog_id",dialog_id);
     query.exec();
     query.prepare("delete from dialogs where login_name=:login_name and username=:username");
     query.bindValue(":login_name",ui->loginEdit->text());

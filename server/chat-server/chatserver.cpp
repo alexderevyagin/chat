@@ -27,6 +27,7 @@ ChatServer::ChatServer(QWidget *parent) :
     timer=new QTimer(this);
     timer->setInterval(30000);
     connect(timer,SIGNAL(timeout()),this,SIGNAL(msgQueueUpd()));
+    startServer();
 }
 
 ChatServer::~ChatServer()
@@ -51,7 +52,10 @@ void ChatServer::getUsers() //Обновление таблицы пользов
         ui->tableWidget->insertRow(ui->tableWidget->rowCount());
         ui->tableWidget->setItem(counter,0,new QTableWidgetItem(query.value(0).toString()));
         ui->tableWidget->setItem(counter,1,new QTableWidgetItem(query.value(1).toString()));
-        ui->tableWidget->setItem(counter,2,new QTableWidgetItem("Не в сети"));
+        if (Sessions.contains(query.value(0).toString()))
+            ui->tableWidget->setItem(counter,2,new QTableWidgetItem("В сети"));
+        else
+            ui->tableWidget->setItem(counter,2,new QTableWidgetItem("Не в сети"));
         counter++;
         Users.append(query.value(0).toString());
     }
@@ -392,13 +396,7 @@ void ChatServer::on_changeUserPwButton_clicked()//Обработчик нажа�
 
 void ChatServer::on_start_triggered()//Обработчик кнопки запуска сервера
 {
-    if (server->listen(QHostAddress::AnyIPv4,12345)){
-        ui->start->setEnabled(false);
-        ui->stop->setEnabled(true);
-        ui->statusBar->showMessage("Сервер запущен");
-        queueProcessing=false;
-        timer->start();
-    }
+    startServer();
 }
 
 void ChatServer::on_stop_triggered() //Обработчик кнопки остановки сервера
@@ -490,4 +488,14 @@ void ChatServer::checkSchema()//Проверка и реинициализаци
     query.exec("CREATE TABLE messages (timestamp integer,to_user text,from_user text, message text);");
     query.exec("CREATE TABLE users (username TEXT, password Text,isBlocked integer);");
     QMessageBox::information(this,"Информация","База реинициализирована! Пожалуйста, выполните перезапуск приложения сервера");}
+}
+void ChatServer::startServer()//Процедура запуска сервера
+{
+    if (server->listen(QHostAddress::AnyIPv4,12345)){
+        ui->start->setEnabled(false);
+        ui->stop->setEnabled(true);
+        ui->statusBar->showMessage("Сервер запущен");
+        queueProcessing=false;
+        timer->start();
+    }
 }
