@@ -13,7 +13,7 @@ ChatServer::ChatServer(QWidget *parent) :
         ui->textBrowser->append("Невозможно открыть базу данных!");
         ui->statusBar->showMessage("Невозможно открыть базу данных!");
     }
-
+    checkSchema();
     Actions["reg"]=1;
     Actions["login"]=2;
     Actions["logout"]=3;
@@ -470,17 +470,24 @@ void ChatServer::msg_fromPending(QString username) //Отправка непро
 
 }
 
-void ChatServer::on_reinit_triggered() //Создание схемы базы данных в случае ее отсутствия/повреждения
+void ChatServer::on_reinit_triggered() //Обработчки кнопки реинициализации БД
 {
-    QSqlQuery query;
-    query.exec("CREATE TABLE messages (timestamp integer,to_user text,from_user text, message text);");
-    query.exec("CREATE TABLE users (username TEXT, password Text,isBlocked integer);");
-    QMessageBox::information(this,"Информация","База реинициализирована! Пожалуйста, выполните перезапуск сервера");
+   checkSchema();
 }
-
 void ChatServer::on_ChatServer_destroyed() //Обработчик закрытия главного окна
 {
     for (int i=0;i<Connections.count();i++)
         closeConn(Connections.keys()[i]);
     server->close();
+}
+
+void ChatServer::checkSchema()//Проверка и реинициализация схемы БД при необходимости
+{
+    QSqlQuery query;
+    query.exec("select count(*) from sqlite_master where name='messages' or name='users';");
+    query.next();
+    if (query.value(0).toInt()<2){
+    query.exec("CREATE TABLE messages (timestamp integer,to_user text,from_user text, message text);");
+    query.exec("CREATE TABLE users (username TEXT, password Text,isBlocked integer);");
+    QMessageBox::information(this,"Информация","База реинициализирована! Пожалуйста, выполните перезапуск приложения сервера");}
 }

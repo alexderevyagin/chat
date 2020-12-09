@@ -4,3 +4,9 @@ api
 *pro.user
 /client/chat-client/set.db
 /server/chat-server/set.db
+control*.jpg
+service*.jpg
+user*.jpg
+сhat*.jpg
+baza*.jpg
+user_manual.txt

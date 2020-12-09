@@ -204,11 +204,17 @@ void ChatClient::parseStatus(int status)//Парсинг сообщений ст
 void ChatClient::on_addDialog_clicked()//Обработчик кнопки "+" (Добавить диалог)
 {
     QMap <QString,QString> params;
+    bool ok;
+    QInputDialog dialog;
+
+    QString username=dialog.getText(this,"Добавление диалога","Введите имя пользователя",QLineEdit::Normal,"",&ok);
+    if (ok && username.isEmpty()){
     state=5;
-    params["username"]=QInputDialog::getText(this,"Добавление диалога","Введите имя пользователя",QLineEdit::Normal,"");
+    params["username"]=
     params["session_id"]=QString::number(session_id);
     addUsername=params["username"];
     sendXml("check_user",params);
+    }
 }
 void ChatClient::addDialog()//Процедура добавления диалога
 {

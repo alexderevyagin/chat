@@ -48,7 +48,7 @@ public:
     void msg_toPending(QString from,QString to,QString message);
     bool msg_hasPenging(QString username);
     void msg_fromPending(QString username);
-
+    void checkSchema();
 private slots:
     void newConnection();
     void readServer();
