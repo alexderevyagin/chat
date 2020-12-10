@@ -18,7 +18,7 @@ ChatServer::ChatServer(QWidget *parent) :
     Actions["login"]=2;
     Actions["logout"]=3;
     Actions["msg-to"]=4;
-    Actions["check_user"]=5;
+    Actions["get_users"]=5;
     getUsers();
     server=new QTcpServer(this);
     connect(server,SIGNAL(newConnection()),this,SLOT(newConnection()));
@@ -147,8 +147,8 @@ void ChatServer::msgProc(int descr, int action, QMap<QString, QString> params)//
         msg_to(descr,params["to"],params["session_id"].toInt(),params["message"]);
         break;
     case 5:
-        ui->textBrowser->append("Добавление диалога");
-        userChk(descr,params["username"],params["session_id"].toInt());
+        ui->textBrowser->append("Запрос списка пользователей");
+        usersSend(descr,params["username"],params["session_id"].toInt());
         break;
     case -1:
         ui->textBrowser->setText("Ошибочное сообщение");
@@ -169,7 +169,7 @@ void ChatServer::reg(int descr, QString username, QString password)//Обраб�
 }
 void ChatServer::sendStatus(int descr, int code,bool isError, bool close)//Процедура отправки статуса
 {
-/* Коды статуса
+    /* Коды статуса
   0 - Действие успешно выполнено
   1 - При выполнении запроса не указан один из параметров
   2 - Пользователь с таким логином существует
@@ -251,6 +251,7 @@ void ChatServer::login(int descr, QString username, QString password)//Проц�
             statMsg.writeEndDocument();
             os<<xmlMsg;
             ui->tableWidget->item(Users.indexOf(username),2)->setText("В сети");
+            sendBroadcast(username,1);
             ui->textBrowser->append("Код завершения: 0");
             if (msg_hasPenging(username))
                 msg_fromPending(username);
@@ -266,6 +267,7 @@ void ChatServer::logout(int descr, QString username, int session_id)//Проце
             Sessions.remove(username);
             sendStatus(descr,0,false,true);
             ui->tableWidget->item(Users.indexOf(username),2)->setText("Не в сети");
+            sendBroadcast(username,0);
         } else sendStatus(descr,4,true,true);
     }else sendStatus(descr,4,true,true);
 }
@@ -274,10 +276,12 @@ void ChatServer::clientDisconnected()//Обработчик события ра�
     QTcpSocket* currentSocket=(QTcpSocket*)sender();
     int descr=Connections.key(currentSocket);
     if (Sessions.key(descr)!=""){
+        sendBroadcast(Sessions.key(descr),0);
         Sessions.remove(Sessions.key(descr));
+
     }
     Connections.remove(descr);
-getUsers();
+    getUsers();
 }
 void ChatServer::msg_to(int descr, QString to,int session_id,QString message)//Обработка сообщений (текстовых) от пользователей
 {
@@ -311,16 +315,33 @@ void ChatServer::userChg(QString username, QString password, int lock_state)//П
 
     getUsers();
 }
-void ChatServer::userChk(int descr, QString username,int session_id)//Проверка наличия пользователя в базе
+void ChatServer::usersSend(int descr, QString username,int session_id)//Отправка списка пользователей клиенту
 {
+    int i;
     QString from;
     if (Sessions.key(descr)!=""){
         from=Sessions.key(descr);
         if (Sessions[from]==session_id){
-            if (Users.contains(username))
-                sendStatus(descr,0,false,false);
-            else
-                sendStatus(descr,6,true,false);
+            QTextStream os(Connections[descr]);
+            QMap <QString,QString> params;
+            QByteArray msg;
+            QXmlStreamWriter xmlMsg(&msg);
+            xmlMsg.writeStartDocument();
+            xmlMsg.writeStartElement("users");
+            for (i=0;i<Users.count();i++){
+                if (Users[i]!=from){
+                    int status=0;
+                    if (Sessions.keys().contains(Users[i]))
+                        status=1;
+                    xmlMsg.writeStartElement("user");
+                    xmlMsg.writeAttribute("status",QString::number(status));
+                    xmlMsg.writeCharacters(Users[i]);
+                    xmlMsg.writeEndElement();}
+            }
+            xmlMsg.writeEndElement();
+            xmlMsg.writeEndDocument();
+            os<<msg;
+
         }else sendStatus(descr,4,true,true);
     }else sendStatus(descr,4,true,false);
 }
@@ -413,7 +434,6 @@ void ChatServer::on_stop_triggered() //Обработчик кнопки ост�
         getUsers();
     }
 }
-
 void ChatServer::on_exit_triggered() //Обработчик кнопки выхода
 {
     for (int i=0;i<Connections.count();i++)
@@ -468,10 +488,6 @@ void ChatServer::msg_fromPending(QString username) //Отправка непро
 
 }
 
-void ChatServer::on_reinit_triggered() //Обработчки кнопки реинициализации БД
-{
-   checkSchema();
-}
 void ChatServer::on_ChatServer_destroyed() //Обработчик закрытия главного окна
 {
     for (int i=0;i<Connections.count();i++)
@@ -485,9 +501,9 @@ void ChatServer::checkSchema()//Проверка и реинициализаци
     query.exec("select count(*) from sqlite_master where name='messages' or name='users';");
     query.next();
     if (query.value(0).toInt()<2){
-    query.exec("CREATE TABLE messages (timestamp integer,to_user text,from_user text, message text);");
-    query.exec("CREATE TABLE users (username TEXT, password Text,isBlocked integer);");
-    QMessageBox::information(this,"Информация","База реинициализирована! Пожалуйста, выполните перезапуск приложения сервера");}
+        query.exec("CREATE TABLE messages (timestamp integer,to_user text,from_user text, message text);");
+        query.exec("CREATE TABLE users (username TEXT, password Text,isBlocked integer);");
+    }
 }
 void ChatServer::startServer()//Процедура запуска сервера
 {
@@ -499,3 +515,33 @@ void ChatServer::startServer()//Процедура запуска сервера
         timer->start();
     }
 }
+void ChatServer::sendBroadcast(QString username, int status)//Процедура отправки широковещательного сообщения
+{
+    int i;
+    int descr;
+    QTextStream os;
+    QMap <QString,QString> params;
+    QByteArray msg;
+    QXmlStreamWriter xmlMsg(&msg);
+    params["username"]=username;
+    params["status"]=QString::number(status);
+    xmlMsg.writeStartDocument();
+    xmlMsg.writeStartElement("action");
+    xmlMsg.writeAttribute("type","broadcast");
+    for (i=0;i<params.keys().count();i++){
+        xmlMsg.writeStartElement("param");
+        xmlMsg.writeAttribute("name",params.keys()[i]);
+        xmlMsg.writeCharacters(params[params.keys()[i]]);
+        xmlMsg.writeEndElement();
+    }
+    xmlMsg.writeEndElement();
+    xmlMsg.writeEndDocument();
+    for (i=0;i<Sessions.keys().count();i++){
+        if (Sessions.keys()[i]!=username){
+            descr=Sessions[Sessions.keys()[i]];
+            os.setDevice(Connections[descr]);
+            os<<msg;}
+    }
+
+}
+

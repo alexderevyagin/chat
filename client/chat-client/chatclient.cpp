@@ -19,6 +19,7 @@ ChatClient::ChatClient(QWidget *parent) :
     connect (client,SIGNAL(disconnected()),this,SLOT(onDisconnected()));
     connect (client,SIGNAL(error(QAbstractSocket::SocketError)),this,SLOT(onSocketError()));
     Actions["msg-from"]=0;
+    Actions["broadcast"]=1;
     errorCode[0]="Не ошибка!";
     errorCode[1]="Ошибка в параметрах запроса!";
     errorCode[2]="Пользователь с таким именем уже существует!";
@@ -26,7 +27,7 @@ ChatClient::ChatClient(QWidget *parent) :
     errorCode[4]="Ошибка аутентификации";
     errorCode[5]="Пользователь заблокирован! Свяжитесь с администратором сервера";
     errorCode[6]="Пользователь не существует!";
-
+    ui->usersFrame->setVisible(false);
 }
 /*Коды состояния:
  * 0 - Процедура входа
@@ -66,7 +67,6 @@ void ChatClient::onReadyRead()//Обработчик нового служебн
     QString tmpmsg;
     tmp=QString::fromUtf8(msg);
     QStringList msgList=tmp.split("\n");
-
     for (i=0;i<msgList.count()-1;i++)
         parseXml(msgList[i].toUtf8());
 }
@@ -111,6 +111,7 @@ void ChatClient::sendLogin()//Процедура отправки авториз
     params["username"]=ui->loginEdit->text();
     params["password"]=ui->passwordEdit->text();
     sendXml("login",params);
+
 }
 void ChatClient::parseXml(QByteArray msg)//Процедура парсинга служебных сообщений
 {
@@ -119,7 +120,9 @@ void ChatClient::parseXml(QByteArray msg)//Процедура парсинга �
     int action=-1;
     int status=-1;
     int id=-1;
+    bool isUsers;
     QMap <QString,QString>params;
+    QMap <QString,int> users;
     while(!xmlMsg.atEnd()){
         QXmlStreamReader::TokenType token=xmlMsg.readNext();
         if (token==QXmlStreamReader::StartDocument)
@@ -142,13 +145,18 @@ void ChatClient::parseXml(QByteArray msg)//Процедура парсинга �
             if (xmlMsg.name()=="status")
                 status=xmlMsg.readElementText().toInt();
 
-
             if (xmlMsg.name()=="session_id")
                 id=xmlMsg.readElementText().toInt();
+            //            if (xmlMsg.name()=="users"&&token==QXmlStreamReader::StartElement)
 
+            if (xmlMsg.name()=="user"&&token==QXmlStreamReader::StartElement){
+                QXmlStreamAttributes attrib=xmlMsg.attributes();
+                users[xmlMsg.readElementText()]=attrib.value("status").toInt();
+            }
             continue;
         }
-
+        if (xmlMsg.name()=="users"&&token==QXmlStreamReader::EndElement)
+            isUsers=true;
         if (isStart && token==QXmlStreamReader::EndDocument)
             break;
     }
@@ -158,21 +166,32 @@ void ChatClient::parseXml(QByteArray msg)//Процедура парсинга �
                 state=4;
                 msg_from(params);
             }
+        if (action==1){
+            DialogStatus[params["username"]]=params["status"].toInt();
+            updateDialogList();
+        }
     }
-
     if (id!=-1){
         completeLogin(id);
+        getUsers();
     }
+    if (isUsers){
+        if (state==5){
+            showUsers(users);
+
+        }else{
+            DialogStatus=users;
+            updateDialogList();}}
     if (status!=-1){
         parseStatus(status);
     }
+
 }
 void ChatClient::completeLogin(int id)//Процедура завершения авторизации
 {
-    if (state==0)
-        ui->loginFrame->setVisible(false);
     session_id=id;
     state=1;
+    ui->loginFrame->setVisible(false);
     ui->userName->setText(ui->loginEdit->text());
     loadDialogs();
 }
@@ -180,9 +199,6 @@ void ChatClient::parseStatus(int status)//Парсинг сообщений ст
 {
     if (status==0){
         switch (state){
-        case 5:
-            addDialog();
-            break;
         case 2:
             showDialog();
             break;
@@ -195,28 +211,16 @@ void ChatClient::parseStatus(int status)//Парсинг сообщений ст
         }
     }
     else {
-        if (state==5)
-            state=1;
         QMessageBox::warning(this,"Ошибка!",errorCode[status]);
     }
 }
 
 void ChatClient::on_addDialog_clicked()//Обработчик кнопки "+" (Добавить диалог)
 {
-    QMap <QString,QString> params;
-    bool ok;
-    QInputDialog dialog;
-
-    QString username=dialog.getText(this,"Добавление диалога","Введите имя пользователя",QLineEdit::Normal,"",&ok);
-    if (ok && !username.isEmpty()){
     state=5;
-    params["username"]=username;
-    params["session_id"]=QString::number(session_id);
-    addUsername=params["username"];
-    sendXml("check_user",params);
-    }
+    getUsers();
 }
-void ChatClient::addDialog()//Процедура добавления диалога
+void ChatClient::addDialog(QString addUsername)//Процедура добавления диалога
 {
     QSqlQuery query;
     QStringList none;
@@ -225,24 +229,32 @@ void ChatClient::addDialog()//Процедура добавления диало
     query.bindValue(":username",addUsername);
     query.bindValue(":login_name",ui->loginEdit->text());
     query.exec();
+    state=1;
     updateDialogList();
 }
 void ChatClient::updateDialogList()//Процедура обновления списка диалогов
 {
+    QFont online,offline;
+    online.setItalic(true);
+    offline.setItalic(false);
     ui->listWidget->clear();
     for (int i=0;i<Dialogs.count();i++){
         ui->listWidget->addItem(Dialogs.keys()[i]);
+        if (DialogStatus[Dialogs.keys()[i]]==1)
+            ui->listWidget->item(i)->setFont(online);
+        else
+            ui->listWidget->item(i)->setFont(offline);
     }
     state=1;
-
 }
 void ChatClient::showDialog()//Процедура отображения диалога
 {
     QSqlQuery query;
     ui->textBrowser->clear();
-    for (int i=0;i<Dialogs[currentDialog].count();i++){
-        ui->textBrowser->append(Dialogs[currentDialog][i]);
-    }
+    if (currentDialog!=""){
+        for (int i=0;i<Dialogs[currentDialog].count();i++){
+            ui->textBrowser->append(Dialogs[currentDialog][i]);
+        }}
     state=1;
 }
 void ChatClient::on_listWidget_itemDoubleClicked(QListWidgetItem *item)//Обработчик события выбора диалога
@@ -305,8 +317,7 @@ void ChatClient::msg_from(QMap<QString, QString> params)//Обработчик �
     QString from=params["from"];
     QString message=params["message"];
     if (!Dialogs.keys().contains(from)){
-        addUsername=from;
-        addDialog();
+        addDialog(from);
     }
     QStringList msg;
     msg.append("\t-"+from+"-");
@@ -324,6 +335,7 @@ void ChatClient::logout()//Обработчик события выхода
     state=0;
     Dialogs.clear();
     ui->textBrowser->clear();
+    DialogStatus.clear();
 }
 
 
@@ -343,6 +355,7 @@ void ChatClient::on_delDialog_clicked()//Обработчик кнопки "-" (
     if (ui->listWidget->selectedItems().count()!=0){
         if (currentDialog==ui->listWidget->selectedItems()[0]->text())
             ui->textBrowser->clear();
+
         Dialogs.remove(ui->listWidget->selectedItems()[0]->text());
         delDialog(ui->listWidget->selectedItems()[0]->text());
     }
@@ -357,6 +370,7 @@ void ChatClient::loadDialogs()//Процедура загрузки диалог
     while (query.next()){
         Dialogs[query.value(0).toString()].append(query.value(1).toString());
     }
+    getUsers();
     updateDialogList();
 }
 void ChatClient::saveDialog(QStringList msg,QString username)//Процедура сохранения сообщений в СУБД
@@ -400,5 +414,39 @@ void ChatClient::delDialog(QString username)//Процедура удалени�
     query.bindValue(":login_name",ui->loginEdit->text());
     query.bindValue(":username",username);
     query.exec();
+}
+void ChatClient::showUsers(QMap<QString,int> users)//Отображение окна со списком пользователей
+{
+    state=1;
+    ui->usersList->clear();
+    int i=0;
+    for (i=0;i<users.keys().count();i++)
+        ui->usersList->insertItem(i,users.keys()[i]);
+    ui->usersFrame->setVisible(true);
+}
+void ChatClient::getUsers()//Запрос пользователей и их состояний с сервера
+{
+    QMap <QString,QString> params;
+    params["username"]="";
+    params["session_id"]=QString::number(session_id);
+    sendXml("get_users",params);
+}
+
+
+void ChatClient::on_userAdd_clicked()//Обработчик кнопки "Добавить"
+{
+    if (ui->usersList->selectedItems().count()!=0){
+        QString addUsername=ui->usersList->selectedItems()[0]->text();
+        if (!Dialogs.keys().contains(addUsername)){
+            addDialog(addUsername);}
+        else {QMessageBox::warning(this,"Ошибка","Пользователь уже в списке ваших контактов");}
+        ui->usersFrame->setVisible(false);
+    }
+}
+
+void ChatClient::on_usersCancel_clicked()//Обработчик кнопки "Отмена"
+{
+    ui->usersFrame->setVisible(false);
+    updateDialogList();
 }
 

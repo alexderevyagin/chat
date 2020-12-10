@@ -37,7 +37,7 @@ public:
     void userDel(QString username);
     void userChg(QString username,QString password,int lock_state);
     bool userChkUniq(QString username);
-    void userChk(int descr,QString username,int session_id);
+    void usersSend(int descr,QString username,int session_id);
     void reg(int descr,QString username,QString password);
     void login(int descr,QString username,QString password);
     void sendStatus(int descr,int code,bool isError,bool close);
@@ -50,6 +50,7 @@ public:
     void msg_fromPending(QString username);
     void checkSchema();
     void startServer();
+    void sendBroadcast(QString username,int status);
 private slots:
     void newConnection();
     void readServer();
@@ -63,7 +64,6 @@ private slots:
     void on_stop_triggered();
     void on_exit_triggered();
     void on_about_triggered();
-    void on_reinit_triggered();
     void on_ChatServer_destroyed();
 
 signals:

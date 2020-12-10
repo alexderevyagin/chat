@@ -23,8 +23,8 @@ public:
     QTcpSocket* client;
     QMap <QString,int> Actions;
     QMap<QString,QStringList> Dialogs;
+    QMap<QString,int> DialogStatus;
     QMap<int,QString>errorCode;
-    QString addUsername;
     QString currentDialog;
     QSqlDatabase db;
     int state;
@@ -34,7 +34,7 @@ public:
     void parseStatus(int status);
     void sendXml(QString action,QMap <QString,QString> params);
     void parseXml(QByteArray msg);
-    void addDialog();
+    void addDialog(QString addUsername);
     void updateDialogList();
     void showDialog();
     void msg_from(QMap<QString,QString> params);
@@ -45,6 +45,8 @@ public:
     void loadDialogs();
     void checkSchema();
     void delDialog(QString username);
+    void getUsers();
+    void showUsers(QMap<QString,int> users);
 private slots:
     void onConnect();
 
@@ -62,10 +64,13 @@ private slots:
 
     void on_sendButton_clicked();
 
-
     void on_logoutButton_clicked();
 
     void on_delDialog_clicked();
+
+    void on_userAdd_clicked();
+
+    void on_usersCancel_clicked();
 
 private:
     Ui::ChatClient *ui;

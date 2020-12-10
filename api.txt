@@ -7,15 +7,16 @@
 Сообщение не должно содержать символов перевода строки (он должен стоять только в конце сообщения).
 
 			Допустимые действия (action) при запросе API
-Действие 		 Описание        		Параметры запроса  	Тэги ответа
-reg     регистрация       			username,password 		status
-login   вход пользователя       		username,password   		session_id/status
-logout  выход пользователя      		username,session_id  		status
-check_user Проверить существование пользователя username,session_id  		status
-msg-to  сообщение для пользователя     		to (username),session_id	status
+Действие 		 Описание        		Параметры запроса  		Тэги ответа
+reg     	регистрация       			username,password 		status
+login   	вход пользователя       		username,password   		session_id/status
+logout  	выход пользователя      		username,session_id  		status
+get_users	Получить список пользователей 		username,session_id  		user (по количеству пользователей) с тэгом status
+msg-to  	сообщение для пользователя     		to (username),session_id	status
 			Допустимые ответы сервера
 Тэг			Описание					Параметры
-action type="msg-from"  сообщение для пользователя 		 from (username),message			
+action type="msg-from"  сообщение для пользователя 		 from (username),message
+action type="broadcast" сообщение о статусе пользователя	 username,status			
 session_id		id сессии при успешной авторизации	 id сессии в тэге
 status 			Статус запроса				 Код статуса и его тип (в аттрибуте type тэга)	
 	
@@ -27,6 +28,10 @@ status 			Статус запроса				 Код статуса и его тип
   4 - Ошибка проверки подлинности (попытка выполнения команды от имени другого пользователя)
   5 - Пользователь заблокирован
   6 - Пользователь не существует
+
+		Коды статуса для широковещательных сообщений и тэга status
+  0 - Пользователь оффлайн
+  1 - Пользователь онлайн
 
 				Пример запроса API 
 Переводы строки добавлены для улучшения читаемости запроса
